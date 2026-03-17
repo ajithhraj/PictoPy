@@ -199,7 +199,6 @@ def db_update_cluster(
     Returns:
         True if the cluster was updated, False if not found
     """
-    # Use provided connection or create a new one
     own_connection = conn is None
     if own_connection:
         conn = sqlite3.connect(DATABASE_PATH)
@@ -207,29 +206,25 @@ def db_update_cluster(
     cursor = conn.cursor()
 
     try:
-        # Build the update query dynamically based on provided parameters
-        update_fields = []
-        update_values = []
-
-        if cluster_name is not None:
-            update_fields.append("cluster_name = ?")
-            update_values.append(cluster_name)
-
-        if not update_fields:
+        if cluster_name is None:
             return False
 
-        update_values.append(cluster_id)
-
         cursor.execute(
-            f"UPDATE face_clusters SET {', '.join(update_fields)} WHERE cluster_id = ?",
-            update_values,
+            "UPDATE face_clusters SET cluster_name = ? WHERE cluster_id = ?",
+            (cluster_name, cluster_id),
         )
 
         updated = cursor.rowcount > 0
-        conn.commit()
+        if own_connection:
+            conn.commit()
         return updated
+    except Exception:
+        if own_connection:
+            conn.rollback()
+        raise
     finally:
-        conn.close()
+        if own_connection:
+            conn.close()
 
 
 def db_get_all_clusters_with_face_counts() -> (

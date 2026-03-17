@@ -1,7 +1,15 @@
+import os
+import sqlite3
+import tempfile
 import pytest
 from unittest.mock import patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from app.database.face_clusters import (
+    db_create_clusters_table,
+    db_get_cluster_by_id,
+    db_update_cluster,
+)
 from app.routes.face_clusters import router as face_clusters_router
 
 app = FastAPI()
@@ -410,3 +418,39 @@ class TestFaceClustersAPI:
         """Test that unsupported HTTP methods return 405."""
         response = client.request(method, endpoint)
         assert response.status_code == 405
+
+
+@pytest.fixture(scope="function")
+def cluster_db():
+    """Create a temporary database for cluster update tests."""
+    db_fd, db_path = tempfile.mkstemp()
+
+    try:
+        with patch("app.database.face_clusters.DATABASE_PATH", db_path):
+            db_create_clusters_table()
+
+            conn = sqlite3.connect(db_path)
+            conn.execute(
+                """
+                INSERT INTO face_clusters (cluster_id, cluster_name, face_image_base64)
+                VALUES (?, ?, ?)
+                """,
+                ("cluster_123", "Original Name", None),
+            )
+            conn.commit()
+            conn.close()
+
+            yield db_path
+    finally:
+        os.close(db_fd)
+        os.unlink(db_path)
+
+
+def test_db_update_cluster_updates_name_with_static_query(cluster_db):
+    with patch("app.database.face_clusters.DATABASE_PATH", cluster_db):
+        updated = db_update_cluster("cluster_123", cluster_name="Renamed Cluster")
+        cluster = db_get_cluster_by_id("cluster_123")
+
+    assert updated is True
+    assert cluster is not None
+    assert cluster["cluster_name"] == "Renamed Cluster"
