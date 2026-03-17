@@ -125,6 +125,20 @@ const EmptyState: React.FC<{ message: string }> = ({ message }) => (
   </div>
 );
 
+const isWeekendMemory = (memory: Memory) => {
+  if (!memory.date_start) {
+    return false;
+  }
+
+  const memoryDate = new Date(memory.date_start);
+  if (Number.isNaN(memoryDate.getTime())) {
+    return false;
+  }
+
+  const day = memoryDate.getDay();
+  return day === 0 || day === 6;
+};
+
 /**
  * Main Memories Page Component
  * Uses Tanstack Query hooks for data fetching
@@ -211,8 +225,10 @@ export const MemoriesPage: React.FC = () => {
     }
   }, [onThisDayQuery.isError, onThisDayQuery.errorMessage, dispatch]);
 
-  // Simple filter state: 'all' | 'location' | 'date'
-  const [filter, setFilter] = useState<'all' | 'location' | 'date'>('all');
+  // Simple filter state: 'all' | 'location' | 'date' | 'weekend'
+  const [filter, setFilter] = useState<'all' | 'location' | 'date' | 'weekend'>(
+    'all',
+  );
 
   // Filter out memories with only 1 image (same as backend min_images=2)
   const memoriesWithMultipleImages = (memories: Memory[]) =>
@@ -225,6 +241,9 @@ export const MemoriesPage: React.FC = () => {
   ).length;
   const dateCount = memoriesWithMultipleImages(allMemories).filter(
     (m) => m.center_lat == null || m.center_lon == null,
+  ).length;
+  const weekendCount = memoriesWithMultipleImages(allMemories).filter(
+    isWeekendMemory,
   ).length;
 
   // Simple filter function
@@ -242,11 +261,15 @@ export const MemoriesPage: React.FC = () => {
         (m) => m.center_lat == null || m.center_lon == null,
       );
     }
+    if (filter === 'weekend') {
+      return multiImageMemories.filter(isWeekendMemory);
+    }
     return multiImageMemories; // 'all'
   };
 
   // Apply filter
   const filteredRecentMemories = applyFilter(recentMemories);
+  const filteredWeekendMemories = applyFilter(allMemories).filter(isWeekendMemory);
   const filteredYearMemories = applyFilter(yearMemories);
   const filteredAllMemories = applyFilter(allMemories);
 
@@ -302,6 +325,16 @@ export const MemoriesPage: React.FC = () => {
                 }`}
               >
                 Date ({dateCount})
+              </button>
+              <button
+                onClick={() => setFilter('weekend')}
+                className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                  filter === 'weekend'
+                    ? 'bg-foreground text-background'
+                    : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+                }`}
+              >
+                Weekend ({weekendCount})
               </button>
             </div>
           )}
@@ -393,7 +426,24 @@ export const MemoriesPage: React.FC = () => {
           )}
 
           {/* ====================================================================
-            SECTION 3: Past Year (Last 365 days)
+            SECTION 3: Weekend Memories
+            ==================================================================== */}
+          {filteredWeekendMemories.length > 0 && (
+            <section className="space-y-6">
+              <SectionHeader
+                title="Weekend Memories"
+                count={filteredWeekendMemories.length}
+              />
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6 lg:grid-cols-3 xl:grid-cols-4">
+                {filteredWeekendMemories.map((memory: Memory) => (
+                  <MemoryCard key={memory.memory_id} memory={memory} />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* ====================================================================
+            SECTION 4: Past Year (Last 365 days)
             ==================================================================== */}
           {filteredYearMemories.length > 0 && (
             <section className="space-y-6">
@@ -427,7 +477,7 @@ export const MemoriesPage: React.FC = () => {
           )}
 
           {/* ====================================================================
-            SECTION 4: All Memories
+            SECTION 5: All Memories
             ==================================================================== */}
           {filteredAllMemories.length > 0 && (
             <section className="space-y-6">
